@@ -196,6 +196,7 @@ void notifySensor( uint16_t Address, uint8_t State )
 void notifySwitchRequest( uint16_t Address, uint8_t Output, uint8_t Direction )
 {
   int n;
+  uint16_t myAddr;
   
   //Direction must be changed to 0 or 1, not 0 or 32
   Direction ? Direction=1 : Direction=0;
@@ -212,10 +213,15 @@ void notifySwitchRequest( uint16_t Address, uint8_t Output, uint8_t Direction )
   //Check if the Address is assigned, configured as output and same Direction
   for (n=0; n<16; n++)
   {
-    if ((svtable.svt.pincfg[n].value1 == Address-1) &&  //Address
+    myAddr=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
+    myAddr=myAddr|svtable.svt.pincfg[n].value1;
+    if ((myAddr == Address-1) &&  //Address
         (bitRead(svtable.svt.pincfg[n].cnfg,7) == 1))   //Setup as an Output
     {
-    
+      #ifdef DEBUG
+      Serial.print("Output assigned to port ");
+      Serial.println(n);
+      #endif
       //If pulse (always hardware reset) and Direction, only listen ON message
       if (bitRead(svtable.svt.pincfg[n].cnfg,3) == 1 && bitRead(svtable.svt.pincfg[n].value2,5) == Direction && Output)
       {
