@@ -47,10 +47,14 @@
 
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
-#define VERSION 101
+#define VERSION 102
 
 //Arduino pin assignment to each of the 16 outputs
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
+
+//Timers for each input in case of using "block" configuration instead of "input" configuration
+//input defined as "block" will keep the signal high at least 2 seconds
+unsigned long inpTimer[16];
 
 //3 bytes defining a pin behavior ( http://wiki.rocrail.net/doku.php?id=loconet-io-en )
 typedef struct 
@@ -111,8 +115,17 @@ void setup()
     //Configure I/O
     for (n=0;n<16;n++)
     {
+      inpTimer[n]=0; //timer initialization
+      
       if (bitRead(svtable.svt.pincfg[n].cnfg,7))
-        pinMode(pinMap[n],OUTPUT);
+      {
+       pinMode(pinMap[n],OUTPUT);
+       //IF HIGH at startup AND output type = CONTINUE ...
+       if (bitRead(svtable.svt.pincfg[n].cnfg,0)==0 && bitRead(svtable.svt.pincfg[n].cnfg,3)==0)
+        digitalWrite(pinMap[n],HIGH);
+      else
+        digitalWrite(pinMap[n],LOW);  
+      }        
       else
       {
         pinMode(pinMap[n],INPUT_PULLUP);
@@ -125,7 +138,7 @@ void setup()
 void loop()
 {  
   int n;
-
+  bool hasChanged;
   
   // Check for any received LocoNet packets
   LnPacket = LocoNet.receive() ;
@@ -160,20 +173,34 @@ void loop()
   {
     if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
     {
+      hasChanged=false;
+      
       //Check if state changed
       if (digitalRead(pinMap[n])!=bitRead(svtable.svt.pincfg[n].value2,4))
+        hasChanged=true;
+        
+      //check if is a delayed block detector and if it's the first activation or deactivation of the input
+      if (bitRead(svtable.svt.pincfg[n].cnfg,4)==1 && bitRead(svtable.svt.pincfg[n].cnfg,2)==0)
+      {
+        if (inpTimer[n]==0 || inpTimer[n]>2000)
+        {
+          inpTimer[n]=millis();
+          hasChanged=true;
+        }      
+      }
+
+      if (hasChanged)
       {
         #ifdef DEBUG
         Serial.print("INPUT ");Serial.print(n);
         Serial.print(" IN PIN "); Serial.print(pinMap[n]);
         Serial.print(" CHANGED, INFORM "); Serial.println(svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5));
         #endif
-
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
         bitWrite(svtable.svt.pincfg[n].value2,4,digitalRead(pinMap[n]));
-        
       }
+      
     }
   }
     
