@@ -47,7 +47,7 @@
 
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
-#define VERSION 102
+#define VERSION 105
 
 //Arduino pin assignment to each of the 16 outputs
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
@@ -113,21 +113,30 @@ void setup()
   else
   {
     //Configure I/O
+    #ifdef DEBUG
+    Serial.println("Initializing pins...");
+    #endif 
     for (n=0;n<16;n++)
     {
       inpTimer[n]=0; //timer initialization
       
       if (bitRead(svtable.svt.pincfg[n].cnfg,7))
       {
-       pinMode(pinMap[n],OUTPUT);
-       //IF HIGH at startup AND output type = CONTINUE ...
-       if (bitRead(svtable.svt.pincfg[n].cnfg,0)==0 && bitRead(svtable.svt.pincfg[n].cnfg,3)==0)
-        digitalWrite(pinMap[n],HIGH);
-      else
-        digitalWrite(pinMap[n],LOW);  
+        #ifdef DEBUG
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.println(" as OUTPUT");
+        #endif 
+        pinMode(pinMap[n],OUTPUT);
+        //IF HIGH at startup AND output type = CONTINUE ...
+        if (bitRead(svtable.svt.pincfg[n].cnfg,0)==0 && bitRead(svtable.svt.pincfg[n].cnfg,3)==0)
+          digitalWrite(pinMap[n],HIGH);
+        else
+          digitalWrite(pinMap[n],LOW);  
       }        
       else
       {
+        #ifdef DEBUG
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.println(" as INPUT_PULLUP");
+        #endif
         pinMode(pinMap[n],INPUT_PULLUP);
         bitWrite(svtable.svt.pincfg[n].value2,4,digitalRead(pinMap[n]));
       }
@@ -139,6 +148,7 @@ void loop()
 {  
   int n;
   bool hasChanged;
+  int currentState;
   
   // Check for any received LocoNet packets
   LnPacket = LocoNet.receive() ;
@@ -163,30 +173,32 @@ void loop()
 
     // If this packet was not a Switch or Sensor Message checks por PEER packet
     if(!LocoNet.processSwitchSensorMessage(LnPacket))
-    {      
+    {       
+
+
+
+      
       processPeerPacket();
     }
   }
   
-  // Check inputs to inform
+  // Check inputs to inform 
   for (n=0; n<16; n++)
   {
     if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
     {
-      hasChanged=false;
-      
-      //Check if state changed
-      if (digitalRead(pinMap[n])!=bitRead(svtable.svt.pincfg[n].value2,4))
-        hasChanged=true;
-        
-      //check if is a delayed block detector and if it's the first activation or deactivation of the input
-      if (bitRead(svtable.svt.pincfg[n].cnfg,4)==1 && bitRead(svtable.svt.pincfg[n].cnfg,2)==0)
+      //Check if state changed 
       {
-        if (inpTimer[n]==0 || inpTimer[n]>2000)
-        {
-          inpTimer[n]=millis();
-          hasChanged=true;
-        }      
+        inpTimer[n]=millis();
+        continue;
+      }
+      
+      hasChanged=true;
+      //check if is a BLOCK DETECTOR with DELAYED SWITCH OFF (as we use pullup resistor, deactivation is HIGH)
+      if (bitRead(svtable.svt.pincfg[n].cnfg,4)==1 && bitRead(svtable.svt.pincfg[n].cnfg,2)==0 && currentState==HIGH)
+      {
+        if ((millis()-inpTimer[n])<2000)
+          hasChanged=false;
       }
 
       if (hasChanged)
@@ -198,7 +210,7 @@ void loop()
         #endif
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
-        bitWrite(svtable.svt.pincfg[n].value2,4,digitalRead(pinMap[n]));
+        bitWrite(svtable.svt.pincfg[n].value2,4,currentState);
       }
       
     }
