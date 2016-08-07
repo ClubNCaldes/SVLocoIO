@@ -47,7 +47,7 @@
 
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
-#define VERSION 105
+#define VERSION 106
 
 //Arduino pin assignment to each of the 16 outputs
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
@@ -170,14 +170,9 @@ void loop()
     Serial.println();
     #endif  
 
-
     // If this packet was not a Switch or Sensor Message checks por PEER packet
     if(!LocoNet.processSwitchSensorMessage(LnPacket))
-    {       
-
-
-
-      
+    {             
       processPeerPacket();
     }
   }
@@ -188,6 +183,8 @@ void loop()
     if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
     {
       //Check if state changed 
+      currentState=digitalRead(pinMap[n]);
+      if (currentState==bitRead(svtable.svt.pincfg[n].value2,4))
       {
         inpTimer[n]=millis();
         continue;
