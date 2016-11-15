@@ -48,9 +48,14 @@
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
 #define VERSION 106
+#define VIDA_LOCOSHIELD_NANO
 
 //Arduino pin assignment to each of the 16 outputs
+#ifdef VIDA_LOCOSHIELD_NANO
+uint8_t pinMap[16]={2,3,4,5,6,9,10,11,21,20,19,18,17,16,13,12};
+#else
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
+#endif
 
 //Timers for each input in case of using "block" configuration instead of "input" configuration
 //input defined as "block" will keep the signal high at least 2 seconds
