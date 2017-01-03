@@ -52,7 +52,7 @@
 
 //Arduino pin assignment to each of the 16 outputs
 #ifdef VIDA_LOCOSHIELD_NANO
-uint8_t pinMap[16]={2,3,4,5,6,9,10,11,21,20,19,18,17,16,13,12};
+uint8_t pinMap[16]={11,10,9,6,5,4,3,2,15,14,19,18,17,16,13,12};
 #else
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
 #endif
