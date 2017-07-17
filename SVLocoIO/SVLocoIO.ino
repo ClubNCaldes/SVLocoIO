@@ -106,7 +106,7 @@ void setup()
     svtable.data[n]=EEPROM.read(n);
 
   //Check for a valid config
-  if (svtable.svt.vrsion!=VERSION)
+  if (svtable.svt.vrsion!=VERSION || svtable.svt.addr_low<1 || svtable.svt.addr_low>240 || svtable.svt.addr_high<1 || svtable.svt.addr_high>100 )
   {
     svtable.svt.vrsion=VERSION;
     svtable.svt.addr_low=81;
@@ -147,6 +147,8 @@ void setup()
       }
     } 
   }
+  
+  Serial.print("Module ");Serial.print(svtable.svt.addr_low);Serial.print("/");Serial.println(svtable.svt.addr_high);
 }
 
 void loop()
@@ -359,6 +361,9 @@ boolean processPeerPacket()
   //OPC_PEER_XFER D2 -> Register to read or write
   if (LnPacket->px.d1==2)
   {
+    #ifdef DEBUG
+    Serial.print("READ ");Serial.print(LnPacket->px.d2);Serial.print(" ");Serial.print(LnPacket->px.d2+1);Serial.print(" ");Serial.println(LnPacket->px.d2+2);
+    #endif
     sendPeerPacket(svtable.data[LnPacket->px.d2], svtable.data[LnPacket->px.d2+1], svtable.data[LnPacket->px.d2+2]);
     return (true);
   }
@@ -383,6 +388,9 @@ boolean processPeerPacket()
 
     //Answer packet        
     sendPeerPacket(0x00, 0x00, LnPacket->px.d4);
+    #ifdef DEBUG
+    Serial.println(">> OPC_PEER_XFER answer sent");
+    #endif
     return (true);
   }
   
@@ -431,6 +439,6 @@ void sendPeerPacket(uint8_t p0, uint8_t p1, uint8_t p2)
   LocoNet.send(&txPacket);
   
   #ifdef DEBUG
-  Serial.println("Packet sent!");
+  Serial.println("OPC_PEER_XFER Packet sent!");
   #endif
 }
