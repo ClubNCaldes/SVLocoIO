@@ -48,7 +48,9 @@
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
 #define VERSION 106
-#define VIDA_LOCOSHIELD_NANO
+
+namespace {
+//#define VIDA_LOCOSHIELD_NANO 1
 
 //Arduino pin assignment to each of the 16 outputs
 #ifdef VIDA_LOCOSHIELD_NANO
@@ -56,6 +58,7 @@ uint8_t pinMap[16]={11,10,9,6,5,4,3,2,15,14,19,18,17,16,13,12};
 #else
 uint8_t pinMap[16]={2,3,4,5,6,9,10,11,12,13,14,15,16,17,18,19};
 #endif
+}
 
 //Timers for each input in case of using "block" configuration instead of "input" configuration
 //input defined as "block" will keep the signal high at least 2 seconds
@@ -91,13 +94,14 @@ lnMsg *LnPacket;
 void setup()
 {
   int n;
+  uint16_t myAddr;
   
   // First initialize the LocoNet interface
   LocoNet.init(7);
 
   // Configure the serial port for 57600 baud
   #ifdef DEBUG
-  Serial.begin(57600);
+  Serial.begin(9600);
   Serial.print("SVLocoIO v.");Serial.println(VERSION);
   #endif 
 
@@ -124,11 +128,12 @@ void setup()
     for (n=0;n<16;n++)
     {
       inpTimer[n]=0; //timer initialization
-      
+      myAddr=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
+      myAddr=myAddr|svtable.svt.pincfg[n].value1;
       if (bitRead(svtable.svt.pincfg[n].cnfg,7))
       {
         #ifdef DEBUG
-        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.println(" as OUTPUT");
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr); Serial.println(" as OUTPUT");
         #endif 
         pinMode(pinMap[n],OUTPUT);
         //IF HIGH at startup AND output type = CONTINUE ...
@@ -140,7 +145,7 @@ void setup()
       else
       {
         #ifdef DEBUG
-        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.println(" as INPUT_PULLUP");
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr); Serial.println(" as INPUT_PULLUP");
         #endif
         pinMode(pinMap[n],INPUT_PULLUP);
         bitWrite(svtable.svt.pincfg[n].value2,4,digitalRead(pinMap[n]));
@@ -210,7 +215,7 @@ void loop()
         #ifdef DEBUG
         Serial.print("INPUT ");Serial.print(n);
         Serial.print(" IN PIN "); Serial.print(pinMap[n]);
-        Serial.print(" CHANGED, INFORM "); Serial.println(svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5));
+        Serial.print(" CHANGED, INFORM "); Serial.println((svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5))+1);
         #endif
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
