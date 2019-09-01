@@ -40,6 +40,9 @@
  * Inspired in GCA50 board from Peter Giling - http://www.phgiling.net/
  * Idea also inspired in LocoShield from SPCoast - http://www.scuba.net/
  * Thanks also to Rocrail group - http://www.rocrail.org
+ ------------------------------------------------------------------------
+ LAST CHANGES:
+ 1/9/2019 - Inform state of all inputs at power on, depends on the define #INFORMATPOWERON
 *************************************************************************/
 
 #include <LocoNet.h>
@@ -47,6 +50,9 @@
 
 //Uncomment this line to debug through the serial monitor
 #define DEBUG
+//Uncomment this line to do not inform of the inputs state at power on
+#define INFORMATPOWERON
+
 #define VERSION 106
 
 namespace {
@@ -225,6 +231,43 @@ void loop()
     }
   }
     
+}
+
+/*************************************************************************/
+/*          LOCONET FUNCTIONS                                            */
+/*************************************************************************/
+void notifyPower( uint8_t State )
+{
+  int n;
+  int currentState;
+  
+  #ifdef DEBUG
+  Serial.print("POWER: ");  
+  Serial.println( State ? "ON" : "OFF" );
+  #endif
+
+  #ifdef INFORMATPOWERON
+  if (State)
+  {
+    // Check inputs to inform 
+    for (n=0; n<16; n++)
+    {
+      if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
+      {
+        currentState=digitalRead(pinMap[n]);
+        
+        #ifdef DEBUG
+        Serial.print("INPUT ");Serial.print(n);
+        Serial.print(" IN PIN "); Serial.print(pinMap[n]);
+        Serial.print(" INFORMED POWER ON: "); Serial.println((svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5))+1);
+        #endif
+        LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
+        //Update state to detect flank (use bit in value2 of SV)
+        bitWrite(svtable.svt.pincfg[n].value2,4,currentState);
+      } 
+    }
+  }
+  #endif
 }
 
 // This call-back function is called from LocoNet.processSwitchSensorMessage
