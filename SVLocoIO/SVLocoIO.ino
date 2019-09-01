@@ -43,6 +43,7 @@
  ------------------------------------------------------------------------
  LAST CHANGES:
  1/9/2019 - Inform state of all inputs at power on, depends on the define #INFORMATPOWERON
+          - Bug fixed on input numbers, they are stored in value1 and value2 different than outputs
 *************************************************************************/
 
 #include <LocoNet.h>
@@ -96,11 +97,12 @@ typedef union {
 SV_DATA svtable;
 lnMsg *LnPacket;
 
+//Table with addresses of pins already converted, input numbers are stored in a different way than output numbers. ¿BUG?
+uint16_t myAddr[16];
   
 void setup()
 {
-  int n;
-  uint16_t myAddr;
+  int n;  
   
   // First initialize the LocoNet interface
   LocoNet.init(7);
@@ -134,12 +136,16 @@ void setup()
     for (n=0;n<16;n++)
     {
       inpTimer[n]=0; //timer initialization
-      myAddr=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
-      myAddr=myAddr|svtable.svt.pincfg[n].value1;
+      
+
+      
       if (bitRead(svtable.svt.pincfg[n].cnfg,7))
       {
-        #ifdef DEBUG
-        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr); Serial.println(" as OUTPUT");
+        myAddr[n]=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
+        myAddr[n]=myAddr[n] | svtable.svt.pincfg[n].value1;
+        myAddr[n]+=1;
+        #ifdef DEBUG        
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr[n]); Serial.println(" as OUTPUT");
         #endif 
         pinMode(pinMap[n],OUTPUT);
         //IF HIGH at startup AND output type = CONTINUE ...
@@ -150,8 +156,11 @@ void setup()
       }        
       else
       {
-        #ifdef DEBUG
-        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" output "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr); Serial.println(" as INPUT_PULLUP");
+        myAddr[n]=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
+        myAddr[n]=myAddr[n] | (svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5));
+        myAddr[n]+=1;
+        #ifdef DEBUG        
+        Serial.print("Pin ");Serial.print(pinMap[n]); Serial.print(" input "); Serial.print(n); Serial.print(" LOGIC "); Serial.print(myAddr[n]); Serial.println(" as INPUT_PULLUP");
         #endif
         pinMode(pinMap[n],INPUT_PULLUP);
         bitWrite(svtable.svt.pincfg[n].value2,4,digitalRead(pinMap[n]));
@@ -198,7 +207,7 @@ void loop()
   // Check inputs to inform 
   for (n=0; n<16; n++)
   {
-    if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
+    if (!bitRead(svtable.svt.pincfg[n].cnfg,7) && myAddr[n]>1)   //Setup as an Input greater than 1
     {
       //Check if state changed 
       currentState=digitalRead(pinMap[n]);
@@ -221,7 +230,7 @@ void loop()
         #ifdef DEBUG
         Serial.print("INPUT ");Serial.print(n);
         Serial.print(" IN PIN "); Serial.print(pinMap[n]);
-        Serial.print(" CHANGED, INFORM "); Serial.println((svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5))+1);
+        Serial.print(" CHANGED, INFORM "); Serial.println(myAddr[n]);
         #endif
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
@@ -252,14 +261,14 @@ void notifyPower( uint8_t State )
     // Check inputs to inform 
     for (n=0; n<16; n++)
     {
-      if (!bitRead(svtable.svt.pincfg[n].cnfg,7))   //Setup as an Input
+      if (!bitRead(svtable.svt.pincfg[n].cnfg,7) && myAddr[n]>1)   //Setup as an Input greater than 1
       {
         currentState=digitalRead(pinMap[n]);
         
         #ifdef DEBUG
         Serial.print("INPUT ");Serial.print(n);
         Serial.print(" IN PIN "); Serial.print(pinMap[n]);
-        Serial.print(" INFORMED POWER ON: "); Serial.println((svtable.svt.pincfg[n].value1<<1 | bitRead(svtable.svt.pincfg[n].value2,5))+1);
+        Serial.print(" INFORMED AT POWER: "); Serial.print(myAddr[n]); Serial.print(" = "); Serial.println(currentState);
         #endif
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
@@ -286,8 +295,7 @@ void notifySensor( uint16_t Address, uint8_t State )
   // for all Switch Request messages
 void notifySwitchRequest( uint16_t Address, uint8_t Output, uint8_t Direction )
 {
-  int n;
-  uint16_t myAddr;
+  int n;  
   
   //Direction must be changed to 0 or 1, not 0 or 32
   Direction ? Direction=1 : Direction=0;
@@ -304,14 +312,12 @@ void notifySwitchRequest( uint16_t Address, uint8_t Output, uint8_t Direction )
   //Check if the Address is assigned, configured as output and same Direction
   for (n=0; n<16; n++)
   {
-    myAddr=(svtable.svt.pincfg[n].value2 & B00001111)<<7;
-    myAddr=myAddr|svtable.svt.pincfg[n].value1;
-    if ((myAddr == Address-1) &&  //Address
+    if ((myAddr[n] == Address) &&  //Address
         (bitRead(svtable.svt.pincfg[n].cnfg,7) == 1))   //Setup as an Output
     {
       #ifdef DEBUG
       Serial.print("Output assigned to port ");
-      Serial.println(n);
+      Serial.print(n+1); Serial.print(" and pin "); Serial.println(pinMap[n]);
       #endif
       //If pulse (always hardware reset) and Direction, only listen ON message
       if (bitRead(svtable.svt.pincfg[n].cnfg,3) == 1 && bitRead(svtable.svt.pincfg[n].value2,5) == Direction && Output)
