@@ -268,8 +268,9 @@ void notifyPower( uint8_t State )
         #ifdef DEBUG
         Serial.print("INPUT ");Serial.print(n);
         Serial.print(" IN PIN "); Serial.print(pinMap[n]);
-        Serial.print(" INFORMED AT POWER: "); Serial.print(myAddr[n]); Serial.print(" = "); Serial.println(currentState);
+        Serial.print(" INFORMED AT POWER: "); Serial.print(myAddr[n]); Serial.print(" = "); Serial.println(!currentState);
         #endif
+        bitWrite(svtable.svt.pincfg[n].value2,4,!currentState);
         LocoNet.send(OPC_INPUT_REP, svtable.svt.pincfg[n].value1, svtable.svt.pincfg[n].value2);
         //Update state to detect flank (use bit in value2 of SV)
         bitWrite(svtable.svt.pincfg[n].value2,4,currentState);
