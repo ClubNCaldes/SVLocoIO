@@ -207,7 +207,7 @@ void loop()
   // Check inputs to inform 
   for (n=0; n<16; n++)
   {
-    if (!bitRead(svtable.svt.pincfg[n].cnfg,7) && myAddr[n]>1)   //Setup as an Input greater than 1
+    if (!bitRead(svtable.svt.pincfg[n].cnfg,7) && myAddr[n]>=1)   
     {
       //Check if state changed 
       currentState=digitalRead(pinMap[n]);
